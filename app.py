@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, send_from_directory
 import sqlite3
 import hashlib
 import os
@@ -10,8 +10,10 @@ import sys
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-app = Flask(__name__)
-app.secret_key = 'doctor_ai_secret_key_2024'
+app = Flask(__name__, static_folder=None)
+app.secret_key = os.environ.get('SECRET_KEY', 'doctor_ai_secret_key_2024')
+
+FRONTEND_DIR = os.path.join(os.path.dirname(__file__), 'frontend', 'dist')
 
 DATABASE = os.path.join(os.path.dirname(__file__), 'database', 'hospital.db')
 
@@ -34,75 +36,61 @@ def hash_password(password):
 
 # ─── Auth routes ─────────────────────────────────────────────────────────────
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    email    = request.form.get('email', '').strip()
+    password = request.form.get('password', '')
+    conn = get_db()
+    user = conn.execute(
+        'SELECT * FROM patients WHERE email = ? AND password = ?',
+        (email, hash_password(password))
+    ).fetchone()
+    conn.close()
+    if user:
+        session['user_id']   = user['id']
+        session['user_name'] = user['name']
+        return jsonify({'success': True, 'name': user['name']})
+    return jsonify({'success': False, 'error': 'Invalid email or password.'}), 401
 
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    if request.method == 'POST':
-        name    = request.form.get('name', '').strip()
-        email   = request.form.get('email', '').strip()
-        password = request.form.get('password', '')
-        phone   = request.form.get('phone', '').strip()
-        age     = request.form.get('age', 0)
-        gender  = request.form.get('gender', '')
+@app.route('/api/register', methods=['POST'])
+def api_register():
+    name    = request.form.get('name', '').strip()
+    email   = request.form.get('email', '').strip()
+    password = request.form.get('password', '')
+    phone   = request.form.get('phone', '').strip()
+    age     = request.form.get('age', 0)
+    gender  = request.form.get('gender', '')
 
-        if not all([name, email, password]):
-            return render_template('register.html', error='All fields are required.')
+    if not all([name, email, password]):
+        return jsonify({'success': False, 'error': 'All fields are required.'}), 400
 
-        conn = get_db()
-        existing = conn.execute('SELECT id FROM patients WHERE email = ?', (email,)).fetchone()
-        if existing:
-            conn.close()
-            return render_template('register.html', error='Email already registered.')
-
-        conn.execute(
-            'INSERT INTO patients (name, email, password, phone, age, gender) VALUES (?,?,?,?,?,?)',
-            (name, email, hash_password(password), phone, age, gender)
-        )
-        conn.commit()
+    conn = get_db()
+    existing = conn.execute('SELECT id FROM patients WHERE email = ?', (email,)).fetchone()
+    if existing:
         conn.close()
-        return redirect(url_for('login'))
+        return jsonify({'success': False, 'error': 'Email already registered.'}), 400
 
-    return render_template('register.html')
+    conn.execute(
+        'INSERT INTO patients (name, email, password, phone, age, gender) VALUES (?,?,?,?,?,?)',
+        (name, email, hash_password(password), phone, age, gender)
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({'success': True})
 
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        email    = request.form.get('email', '').strip()
-        password = request.form.get('password', '')
-
-        conn = get_db()
-        user = conn.execute(
-            'SELECT * FROM patients WHERE email = ? AND password = ?',
-            (email, hash_password(password))
-        ).fetchone()
-        conn.close()
-
-        if user:
-            session['user_id']   = user['id']
-            session['user_name'] = user['name']
-            return redirect(url_for('dashboard'))
-        return render_template('login.html', error='Invalid email or password.')
-
-    return render_template('login.html')
-
-@app.route('/logout')
-def logout():
+@app.route('/api/logout')
+def api_logout():
     session.clear()
-    return redirect(url_for('index'))
+    return jsonify({'success': True})
 
-# ─── Dashboard ────────────────────────────────────────────────────────────────
+# ─── Dashboard API ────────────────────────────────────────────────────────────
 
-@app.route('/dashboard')
-def dashboard():
+@app.route('/api/dashboard')
+def api_dashboard():
     if 'user_id' not in session:
-        return redirect(url_for('login'))
-
+        return jsonify({'error': 'Not authenticated'}), 401
     uid  = session['user_id']
     conn = get_db()
-
     appointments = conn.execute('''
         SELECT a.*, d.name AS doctor_name, d.specialization
         FROM appointments a
@@ -110,72 +98,63 @@ def dashboard():
         WHERE a.patient_id = ?
         ORDER BY a.appointment_date DESC
     ''', (uid,)).fetchall()
-
-    total   = len(appointments)
+    total    = len(appointments)
     upcoming = sum(1 for a in appointments if a['status'] == 'scheduled')
     completed = sum(1 for a in appointments if a['status'] == 'completed')
     conn.close()
+    return jsonify({
+        'appointments': [dict(a) for a in appointments],
+        'total': total, 'upcoming': upcoming, 'completed': completed,
+        'user_name': session.get('user_name', '')
+    })
 
-    return render_template('dashboard.html',
-        appointments=appointments,
-        total=total, upcoming=upcoming, completed=completed)
+# ─── Book Appointment API ─────────────────────────────────────────────────────
 
-# ─── Book Appointment ─────────────────────────────────────────────────────────
-
-@app.route('/book', methods=['GET', 'POST'])
-def book_appointment():
+@app.route('/api/book', methods=['POST'])
+def api_book():
     if 'user_id' not in session:
-        return redirect(url_for('login'))
+        return jsonify({'error': 'Not authenticated'}), 401
+    data      = request.get_json()
+    doctor_id = data.get('doctor_id')
+    date      = data.get('appointment_date')
+    time_slot = data.get('time_slot')
+    reason    = data.get('reason', '')
 
-    conn    = get_db()
-    doctors = conn.execute('SELECT * FROM doctors ORDER BY rating DESC').fetchall()
-
-    if request.method == 'POST':
-        doctor_id = request.form.get('doctor_id')
-        date      = request.form.get('appointment_date')
-        time_slot = request.form.get('time_slot')
-        reason    = request.form.get('reason', '')
-
-        # Check overlap
-        existing = conn.execute('''
-            SELECT id FROM appointments
-            WHERE doctor_id = ? AND appointment_date = ? AND time_slot = ? AND status != 'cancelled'
-        ''', (doctor_id, date, time_slot)).fetchone()
-
-        if existing:
-            conn.close()
-            return render_template('book_appointment.html', doctors=doctors,
-                                   error='This slot is already booked. Please choose another.')
-
-        conn.execute('''
-            INSERT INTO appointments (patient_id, doctor_id, appointment_date, time_slot, reason, status)
-            VALUES (?,?,?,?,?,'scheduled')
-        ''', (session['user_id'], doctor_id, date, time_slot, reason))
-        conn.commit()
+    conn = get_db()
+    existing = conn.execute('''
+        SELECT id FROM appointments
+        WHERE doctor_id = ? AND appointment_date = ? AND time_slot = ? AND status != 'cancelled'
+    ''', (doctor_id, date, time_slot)).fetchone()
+    if existing:
         conn.close()
-        return redirect(url_for('dashboard'))
+        return jsonify({'success': False, 'error': 'Slot already booked.'}), 400
 
+    conn.execute('''
+        INSERT INTO appointments (patient_id, doctor_id, appointment_date, time_slot, reason, status)
+        VALUES (?,?,?,?,?,'scheduled')
+    ''', (session['user_id'], doctor_id, date, time_slot, reason))
+    conn.commit()
     conn.close()
-    return render_template('book_appointment.html', doctors=doctors)
+    return jsonify({'success': True})
 
-@app.route('/cancel_appointment/<int:appt_id>', methods=['POST'])
-def cancel_appointment(appt_id):
+@app.route('/api/cancel/<int:appt_id>', methods=['POST'])
+def api_cancel(appt_id):
     if 'user_id' not in session:
-        return redirect(url_for('login'))
+        return jsonify({'error': 'Not authenticated'}), 401
     conn = get_db()
     conn.execute("UPDATE appointments SET status = 'cancelled' WHERE id = ? AND patient_id = ?",
                  (appt_id, session['user_id']))
     conn.commit()
     conn.close()
-    return redirect(url_for('dashboard'))
+    return jsonify({'success': True})
 
-# ─── Chatbot ─────────────────────────────────────────────────────────────────
-
-@app.route('/chatbot')
-def chatbot():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    return render_template('chatbot.html')
+@app.route('/api/session')
+def api_session():
+    return jsonify({
+        'logged_in': 'user_id' in session,
+        'user_name': session.get('user_name', ''),
+        'user_id': session.get('user_id', None)
+    })
 
 @app.route('/api/chatbot', methods=['POST'])
 def chatbot_api():
@@ -186,13 +165,7 @@ def chatbot_api():
     reply = get_response(message)
     return jsonify({'reply': reply})
 
-# ─── Symptom Checker ─────────────────────────────────────────────────────────
-
-@app.route('/symptom-checker')
-def symptom_checker():
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    return render_template('symptom_checker.html')
+# ─── Symptom Checker API ─────────────────────────────────────────────────────
 
 @app.route('/api/check-symptoms', methods=['POST'])
 def check_symptoms():
@@ -279,6 +252,15 @@ def add_review():
     conn.commit()
     conn.close()
     return jsonify({'success': True})
+
+# ─── React Frontend ───────────────────────────────────────────────────────────
+
+@app.route('/', defaults={'path': ''})
+@app.route('/<path:path>')
+def serve_react(path):
+    if path and os.path.exists(os.path.join(FRONTEND_DIR, path)):
+        return send_from_directory(FRONTEND_DIR, path)
+    return send_from_directory(FRONTEND_DIR, 'index.html')
 
 # ─── Initialization ──────────────────────────────────────────────────────────
 

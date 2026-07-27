@@ -7,3 +7,5 @@ database/*.db
 *.egg-info/
 venv/
 .venv/
+frontend/node_modules/
+frontend/.vite/
