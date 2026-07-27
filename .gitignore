@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+*.pkl
+models/*.pkl
+database/*.db
+.env
+*.egg-info/
+venv/
+.venv/

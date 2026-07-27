@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MediAI — Smart Doctor Booking</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="landing-page">
+
+  <nav class="navbar">
+    <div class="nav-brand">Medi<span>AI</span></div>
+    <div class="nav-links">
+      <a href="{{ url_for('login') }}" class="btn btn-ghost">Sign In</a>
+      <a href="{{ url_for('register') }}" class="btn btn-primary">Get Started</a>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <div class="hero-bg-grid"></div>
+    <div class="hero-content">
+      <div class="hero-badge">🤖 AI-Powered Healthcare</div>
+      <h1 class="hero-title">
+        Your Health,<br>
+        <span class="gradient-text">Intelligently Managed</span>
+      </h1>
+      <p class="hero-subtitle">
+        Book doctors, check symptoms with AI, and get emergency alerts —
+        all in one smart healthcare platform.
+      </p>
+      <div class="hero-actions">
+        <a href="{{ url_for('register') }}" class="btn btn-primary btn-lg">Book Appointment</a>
+        <a href="{{ url_for('login') }}" class="btn btn-outline btn-lg">Sign In</a>
+      </div>
+      <div class="hero-stats">
+        <div class="stat"><span class="stat-num">12+</span><span class="stat-label">Specialists</span></div>
+        <div class="stat"><span class="stat-num">AI</span><span class="stat-label">Symptom Check</span></div>
+        <div class="stat"><span class="stat-num">24/7</span><span class="stat-label">Available</span></div>
+      </div>
+    </div>
+    <div class="hero-visual">
+      <div class="floating-card card-1">
+        <div class="fc-icon">💊</div>
+        <div class="fc-text"><strong>AI Diagnosis</strong><br><small>Instant symptom analysis</small></div>
+      </div>
+      <div class="floating-card card-2">
+        <div class="fc-icon">📅</div>
+        <div class="fc-text"><strong>Smart Booking</strong><br><small>No overlaps guaranteed</small></div>
+      </div>
+      <div class="floating-card card-3">
+        <div class="fc-icon">🚨</div>
+        <div class="fc-text"><strong>Emergency Alert</strong><br><small>Critical symptom detection</small></div>
+      </div>
+      <div class="hero-orb"></div>
+    </div>
+  </section>
+
+  <section class="features">
+    <h2 class="section-title">Everything you need for better healthcare</h2>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">🧠</div>
+        <h3>AI Symptom Checker</h3>
+        <p>Input symptoms and get instant disease predictions using our trained machine learning model.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">👨‍⚕️</div>
+        <h3>Doctor Recommendations</h3>
+        <p>Automatically match with the right specialist based on your diagnosis and ratings.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🎤</div>
+        <h3>Voice Booking</h3>
+        <p>Speak to book — use natural language to schedule appointments hands-free.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🤖</div>
+        <h3>AI Chatbot</h3>
+        <p>24/7 assistant for appointment help, FAQs, and health guidance.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">⚡</div>
+        <h3>Emergency Detection</h3>
+        <p>Critical symptom combinations trigger instant emergency alerts with helpline numbers.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📊</div>
+        <h3>Smart Dashboard</h3>
+        <p>Track appointments, view history, and manage your healthcare in one place.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <p>© 2024 MediAI — AI-Powered Healthcare Platform | Final Year Project</p>
+  </footer>
+
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

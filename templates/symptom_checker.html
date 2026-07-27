@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Symptom Checker — MediAI</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="app-page">
+
+  <nav class="app-navbar">
+    <div class="nav-brand">Medi<span>AI</span></div>
+    <div class="nav-links">
+      <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
+      <a href="{{ url_for('book_appointment') }}" class="nav-link">Book</a>
+      <a href="{{ url_for('symptom_checker') }}" class="nav-link active">Symptoms</a>
+      <a href="{{ url_for('chatbot') }}" class="nav-link">Chatbot</a>
+      <span class="nav-user">👤 {{ session.user_name }}</span>
+      <a href="{{ url_for('logout') }}" class="btn btn-ghost btn-sm">Logout</a>
+    </div>
+  </nav>
+
+  <main class="app-main">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">AI Symptom Checker</h1>
+        <p class="page-sub">Select your symptoms and our AI will predict the likely condition</p>
+      </div>
+    </div>
+
+    <!-- Emergency Banner (hidden by default) -->
+    <div class="emergency-banner" id="emergencyBanner" style="display:none;">
+      <div class="emergency-icon">🚨</div>
+      <div class="emergency-text">
+        <strong>EMERGENCY ALERT!</strong> Your symptoms may indicate a serious medical condition.
+        Call <strong>108</strong> (Ambulance) or <strong>112</strong> immediately!
+      </div>
+    </div>
+
+    <div class="symptom-layout">
+      <div class="symptom-panel">
+        <h2>Select Symptoms</h2>
+        <div class="symptom-search">
+          <input type="text" id="symSearch" placeholder="🔍 Search symptoms..." class="search-input"
+                 oninput="filterSymptoms()">
+        </div>
+
+        <div class="selected-symptoms" id="selectedSymptoms">
+          <p class="sym-hint">No symptoms selected yet</p>
+        </div>
+
+        <div class="symptoms-tags" id="symptomTags">
+          <!-- Dynamically loaded -->
+        </div>
+
+        <div class="symptom-actions">
+          <button onclick="clearSymptoms()" class="btn btn-ghost">Clear All</button>
+          <button onclick="analyzeSymptoms()" class="btn btn-primary" id="analyzeBtn" disabled>
+            🧠 Analyze Symptoms
+          </button>
+        </div>
+      </div>
+
+      <div class="result-panel" id="resultPanel" style="display:none;">
+        <h2>AI Diagnosis Result</h2>
+        <div class="diagnosis-card">
+          <div class="diagnosis-disease" id="diagDisease">—</div>
+          <div class="confidence-bar-wrap">
+            <div class="confidence-label">Confidence: <span id="diagConf">0</span>%</div>
+            <div class="confidence-bar"><div class="confidence-fill" id="confFill"></div></div>
+          </div>
+          <div class="diagnosis-specialist">
+            Recommended Specialist: <strong id="diagSpec">—</strong>
+          </div>
+        </div>
+
+        <div id="doctorRecs" class="doctor-recs">
+          <h3>Recommended Doctors</h3>
+          <div id="recDoctorsList"></div>
+        </div>
+
+        <a href="{{ url_for('book_appointment') }}" class="btn btn-primary btn-full">
+          Book with Recommended Doctor →
+        </a>
+      </div>
+    </div>
+  </main>
+
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+  <script>
+    const ALL_SYMPTOMS = [
+      'fever','cough','fatigue','headache','chest_pain','shortness_of_breath',
+      'nausea','vomiting','diarrhea','abdominal_pain','back_pain','joint_pain',
+      'skin_rash','itching','dizziness','blurred_vision','runny_nose','sore_throat',
+      'muscle_pain','loss_of_appetite','weight_loss','excessive_thirst','frequent_urination',
+      'swollen_lymph_nodes','high_blood_pressure','palpitations','sweating',
+      'chills','stiff_neck','seizures','numbness','tingling','hearing_loss',
+      'ear_pain','eye_redness','watery_eyes','difficulty_swallowing','hoarseness',
+      'bloating','constipation','blood_in_urine','painful_urination',
+      'irregular_heartbeat','swollen_joints','cold_hands','yellowing_skin','dark_urine'
+    ];
+
+    let selected = new Set();
+
+    function renderTags(symptoms) {
+      document.getElementById('symptomTags').innerHTML = symptoms.map(s =>
+        `<button type="button" class="sym-tag ${selected.has(s) ? 'selected' : ''}"
+          onclick="toggleSymptom('${s}')">${s.replace(/_/g,' ')}</button>`
+      ).join('');
+    }
+
+    function filterSymptoms() {
+      const q = document.getElementById('symSearch').value.toLowerCase();
+      renderTags(ALL_SYMPTOMS.filter(s => s.includes(q.replace(/ /g,'_'))));
+    }
+
+    function toggleSymptom(s) {
+      selected.has(s) ? selected.delete(s) : selected.add(s);
+      renderTags(ALL_SYMPTOMS);
+      updateSelectedDisplay();
+    }
+
+    function updateSelectedDisplay() {
+      const container = document.getElementById('selectedSymptoms');
+      const analyzeBtn = document.getElementById('analyzeBtn');
+      if (selected.size === 0) {
+        container.innerHTML = '<p class="sym-hint">No symptoms selected yet</p>';
+        analyzeBtn.disabled = true;
+      } else {
+        container.innerHTML = [...selected].map(s =>
+          `<span class="selected-sym-tag">${s.replace(/_/g,' ')} <button onclick="toggleSymptom('${s}')">×</button></span>`
+        ).join('');
+        analyzeBtn.disabled = false;
+      }
+    }
+
+    function clearSymptoms() {
+      selected.clear();
+      renderTags(ALL_SYMPTOMS);
+      updateSelectedDisplay();
+      document.getElementById('resultPanel').style.display = 'none';
+      document.getElementById('emergencyBanner').style.display = 'none';
+    }
+
+    async function analyzeSymptoms() {
+      if (selected.size === 0) return;
+      const btn = document.getElementById('analyzeBtn');
+      btn.textContent = '⏳ Analyzing...';
+      btn.disabled = true;
+
+      const res  = await fetch('/api/check-symptoms', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({symptoms: [...selected]})
+      });
+      const data = await res.json();
+
+      btn.textContent = '🧠 Analyze Symptoms';
+      btn.disabled = false;
+
+      // Emergency
+      if (data.emergency) {
+        document.getElementById('emergencyBanner').style.display = 'flex';
+        document.getElementById('emergencyBanner').scrollIntoView({behavior:'smooth'});
+      } else {
+        document.getElementById('emergencyBanner').style.display = 'none';
+      }
+
+      // Show result
+      document.getElementById('diagDisease').textContent = data.disease;
+      document.getElementById('diagConf').textContent = data.confidence;
+      document.getElementById('confFill').style.width = data.confidence + '%';
+      document.getElementById('diagSpec').textContent = data.specialist;
+
+      // Doctor recs
+      const recList = document.getElementById('recDoctorsList');
+      if (data.doctors && data.doctors.length) {
+        recList.innerHTML = data.doctors.map(d =>
+          `<div class="rec-doctor-card">
+            <div class="rec-doc-avatar">${d.name[3]}</div>
+            <div>
+              <div class="rec-doc-name">${d.name}</div>
+              <div class="rec-doc-spec">${d.specialization} | ⭐ ${d.rating} | ₹${d.fee}</div>
+            </div>
+          </div>`
+        ).join('');
+        document.getElementById('doctorRecs').style.display = 'block';
+      } else {
+        document.getElementById('doctorRecs').style.display = 'none';
+      }
+
+      document.getElementById('resultPanel').style.display = 'block';
+      document.getElementById('resultPanel').scrollIntoView({behavior:'smooth'});
+    }
+
+    // Init
+    renderTags(ALL_SYMPTOMS);
+  </script>
+</body>
+</html>

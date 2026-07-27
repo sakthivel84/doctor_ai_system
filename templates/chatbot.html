@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Chatbot — MediAI</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="app-page">
+
+  <nav class="app-navbar">
+    <div class="nav-brand">Medi<span>AI</span></div>
+    <div class="nav-links">
+      <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
+      <a href="{{ url_for('book_appointment') }}" class="nav-link">Book</a>
+      <a href="{{ url_for('symptom_checker') }}" class="nav-link">Symptoms</a>
+      <a href="{{ url_for('chatbot') }}" class="nav-link active">Chatbot</a>
+      <span class="nav-user">👤 {{ session.user_name }}</span>
+      <a href="{{ url_for('logout') }}" class="btn btn-ghost btn-sm">Logout</a>
+    </div>
+  </nav>
+
+  <main class="app-main chatbot-main">
+    <div class="chatbot-container">
+      <div class="chatbot-header">
+        <div class="bot-avatar">🤖</div>
+        <div>
+          <div class="bot-name">MediBot</div>
+          <div class="bot-status"><span class="status-dot"></span> Online</div>
+        </div>
+      </div>
+
+      <div class="chat-messages" id="chatMessages">
+        <div class="chat-msg bot-msg">
+          <div class="msg-avatar">🤖</div>
+          <div class="msg-bubble">
+            Hello! I'm <strong>MediBot</strong> 👋<br>
+            I can help you with appointments, symptoms, and health queries.<br><br>
+            Try asking me about:<br>
+            • How to book an appointment<br>
+            • Available doctor timings<br>
+            • Emergency contacts<br>
+            • Symptom guidance
+          </div>
+        </div>
+      </div>
+
+      <div class="quick-replies">
+        <button onclick="sendQuick('How do I book an appointment?')">Book Appointment</button>
+        <button onclick="sendQuick('What are the doctor timings?')">Doctor Timings</button>
+        <button onclick="sendQuick('I have chest pain')">Emergency Help</button>
+        <button onclick="sendQuick('What are consultation fees?')">Consultation Fees</button>
+      </div>
+
+      <div class="chat-input-bar">
+        <input type="text" id="chatInput" placeholder="Type your message..."
+               onkeypress="if(event.key==='Enter') sendMessage()">
+        <button id="voiceChatBtn" onclick="startChatVoice()" class="btn-icon" title="Voice input">🎤</button>
+        <button onclick="sendMessage()" class="btn btn-primary">Send</button>
+      </div>
+    </div>
+  </main>
+
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+  <script>
+    async function sendMessage() {
+      const input = document.getElementById('chatInput');
+      const msg   = input.value.trim();
+      if (!msg) return;
+
+      appendMessage(msg, 'user');
+      input.value = '';
+
+      // Typing indicator
+      const typingId = appendTyping();
+
+      const res  = await fetch('/api/chatbot', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({message: msg})
+      });
+      const data = await res.json();
+
+      removeTyping(typingId);
+      appendMessage(data.reply, 'bot');
+    }
+
+    function sendQuick(msg) {
+      document.getElementById('chatInput').value = msg;
+      sendMessage();
+    }
+
+    function appendMessage(text, sender) {
+      const container = document.getElementById('chatMessages');
+      const div = document.createElement('div');
+      div.className = `chat-msg ${sender === 'user' ? 'user-msg' : 'bot-msg'}`;
+      const avatar = sender === 'user' ? '👤' : '🤖';
+      // Convert markdown-style bold
+      const formatted = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br>');
+      div.innerHTML = `<div class="msg-avatar">${avatar}</div><div class="msg-bubble">${formatted}</div>`;
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function appendTyping() {
+      const container = document.getElementById('chatMessages');
+      const div = document.createElement('div');
+      div.className = 'chat-msg bot-msg typing-msg';
+      div.id = 'typing-' + Date.now();
+      div.innerHTML = `<div class="msg-avatar">🤖</div><div class="msg-bubble typing-dots"><span></span><span></span><span></span></div>`;
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+      return div.id;
+    }
+
+    function removeTyping(id) {
+      const el = document.getElementById(id);
+      if (el) el.remove();
+    }
+
+    function startChatVoice() {
+      if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+        alert('Voice input not supported in this browser. Try Chrome.');
+        return;
+      }
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const recognition = new SR();
+      recognition.lang = 'en-IN';
+      recognition.start();
+      document.getElementById('voiceChatBtn').textContent = '🔴';
+      recognition.onresult = e => {
+        document.getElementById('chatInput').value = e.results[0][0].transcript;
+        document.getElementById('voiceChatBtn').textContent = '🎤';
+        sendMessage();
+      };
+      recognition.onerror = () => {
+        document.getElementById('voiceChatBtn').textContent = '🎤';
+      };
+    }
+  </script>
+</body>
+</html>

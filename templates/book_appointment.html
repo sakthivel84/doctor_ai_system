@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Book Appointment — MediAI</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="app-page">
+
+  <nav class="app-navbar">
+    <div class="nav-brand">Medi<span>AI</span></div>
+    <div class="nav-links">
+      <a href="{{ url_for('dashboard') }}" class="nav-link">Dashboard</a>
+      <a href="{{ url_for('book_appointment') }}" class="nav-link active">Book</a>
+      <a href="{{ url_for('symptom_checker') }}" class="nav-link">Symptoms</a>
+      <a href="{{ url_for('chatbot') }}" class="nav-link">Chatbot</a>
+      <span class="nav-user">👤 {{ session.user_name }}</span>
+      <a href="{{ url_for('logout') }}" class="btn btn-ghost btn-sm">Logout</a>
+    </div>
+  </nav>
+
+  <main class="app-main">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Book an Appointment</h1>
+        <p class="page-sub">Choose your doctor and preferred time slot</p>
+      </div>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    <div class="book-layout">
+      <!-- Doctor Selection -->
+      <div class="book-doctors">
+        <h2>Available Doctors</h2>
+        <div class="doctor-filter">
+          <input type="text" id="docSearch" placeholder="🔍 Search by name or specialty..." class="search-input">
+        </div>
+        <div class="doctors-grid" id="doctorsGrid">
+          {% for doc in doctors %}
+          <div class="doctor-card" data-id="{{ doc.id }}" data-name="{{ doc.name }}"
+               data-spec="{{ doc.specialization }}" onclick="selectDoctor(this)">
+            <div class="doc-avatar">{{ doc.name[3] }}</div>
+            <div class="doc-info">
+              <div class="doc-name">{{ doc.name }}</div>
+              <div class="doc-spec">{{ doc.specialization }}</div>
+              <div class="doc-meta">
+                <span class="doc-exp">{{ doc.experience }}y exp</span>
+                <span class="doc-rating">⭐ {{ doc.rating }}</span>
+                <span class="doc-fee">₹{{ doc.fee }}</span>
+              </div>
+            </div>
+            <div class="doc-select-indicator">✓</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Booking Form -->
+      <div class="book-form-panel">
+        <h2>Appointment Details</h2>
+        <form method="POST" action="{{ url_for('book_appointment') }}" id="bookingForm">
+          <input type="hidden" name="doctor_id" id="selectedDoctorId">
+
+          <div class="selected-doctor-display" id="selectedDoctorDisplay" style="display:none;">
+            <div class="sdd-name" id="sddName"></div>
+            <div class="sdd-spec" id="sddSpec"></div>
+          </div>
+
+          <div class="form-group">
+            <label>Appointment Date</label>
+            <input type="date" name="appointment_date" id="apptDate" required
+                   min="{{ '' }}" onchange="loadSlots()">
+          </div>
+
+          <div class="form-group">
+            <label>Time Slot</label>
+            <div class="slots-grid" id="slotsGrid">
+              <p class="slots-hint">Select a doctor and date to see available slots</p>
+            </div>
+            <input type="hidden" name="time_slot" id="selectedSlot" required>
+          </div>
+
+          <div class="form-group">
+            <label>Reason for Visit</label>
+            <textarea name="reason" rows="3" placeholder="Briefly describe your symptoms or reason..."></textarea>
+          </div>
+
+          <!-- Voice Booking -->
+          <div class="voice-section">
+            <button type="button" id="voiceBtn" onclick="startVoice()" class="btn btn-outline">
+              🎤 Voice Input
+            </button>
+            <span id="voiceStatus" class="voice-status"></span>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-full" id="submitBtn" disabled>
+            Confirm Appointment
+          </button>
+        </form>
+      </div>
+    </div>
+  </main>
+
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+  <script>
+    // Set min date to today
+    document.getElementById('apptDate').min = new Date().toISOString().split('T')[0];
+
+    let selectedDoctorId = null;
+
+    function selectDoctor(el) {
+      document.querySelectorAll('.doctor-card').forEach(c => c.classList.remove('selected'));
+      el.classList.add('selected');
+      selectedDoctorId = el.dataset.id;
+      document.getElementById('selectedDoctorId').value = selectedDoctorId;
+      document.getElementById('sddName').textContent = el.dataset.name;
+      document.getElementById('sddSpec').textContent = el.dataset.spec;
+      document.getElementById('selectedDoctorDisplay').style.display = 'block';
+      loadSlots();
+    }
+
+    async function loadSlots() {
+      const date = document.getElementById('apptDate').value;
+      if (!selectedDoctorId || !date) return;
+
+      const grid = document.getElementById('slotsGrid');
+      grid.innerHTML = '<p class="slots-hint">Loading slots...</p>';
+
+      const res  = await fetch('/api/available-slots', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({doctor_id: selectedDoctorId, date})
+      });
+      const data = await res.json();
+
+      if (!data.slots.length) {
+        grid.innerHTML = '<p class="slots-hint text-error">No slots available for this date.</p>';
+        return;
+      }
+
+      grid.innerHTML = data.slots.map(s =>
+        `<button type="button" class="slot-btn" onclick="selectSlot(this, '${s}')">${s}</button>`
+      ).join('');
+    }
+
+    function selectSlot(el, slot) {
+      document.querySelectorAll('.slot-btn').forEach(b => b.classList.remove('selected'));
+      el.classList.add('selected');
+      document.getElementById('selectedSlot').value = slot;
+      checkFormReady();
+    }
+
+    function checkFormReady() {
+      const ready = selectedDoctorId &&
+                    document.getElementById('apptDate').value &&
+                    document.getElementById('selectedSlot').value;
+      document.getElementById('submitBtn').disabled = !ready;
+    }
+
+    // Doctor search filter
+    document.getElementById('docSearch').addEventListener('input', function() {
+      const q = this.value.toLowerCase();
+      document.querySelectorAll('.doctor-card').forEach(c => {
+        const match = c.dataset.name.toLowerCase().includes(q) ||
+                      c.dataset.spec.toLowerCase().includes(q);
+        c.style.display = match ? '' : 'none';
+      });
+    });
+
+    document.getElementById('apptDate').addEventListener('change', checkFormReady);
+  </script>
+</body>
+</html>

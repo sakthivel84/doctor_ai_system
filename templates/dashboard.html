@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — MediAI</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="app-page">
+
+  {% include 'partials/_navbar.html' ignore missing %}
+  <nav class="app-navbar">
+    <div class="nav-brand">Medi<span>AI</span></div>
+    <div class="nav-links">
+      <a href="{{ url_for('dashboard') }}" class="nav-link active">Dashboard</a>
+      <a href="{{ url_for('book_appointment') }}" class="nav-link">Book</a>
+      <a href="{{ url_for('symptom_checker') }}" class="nav-link">Symptoms</a>
+      <a href="{{ url_for('chatbot') }}" class="nav-link">Chatbot</a>
+      <span class="nav-user">👤 {{ session.user_name }}</span>
+      <a href="{{ url_for('logout') }}" class="btn btn-ghost btn-sm">Logout</a>
+    </div>
+  </nav>
+
+  <main class="app-main">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Good day, {{ session.user_name.split()[0] }} 👋</h1>
+        <p class="page-sub">Here's your health overview</p>
+      </div>
+      <a href="{{ url_for('book_appointment') }}" class="btn btn-primary">+ New Appointment</a>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="stats-grid">
+      <div class="stat-card stat-blue">
+        <div class="stat-icon">📋</div>
+        <div class="stat-info">
+          <div class="stat-num">{{ total }}</div>
+          <div class="stat-label">Total Appointments</div>
+        </div>
+      </div>
+      <div class="stat-card stat-green">
+        <div class="stat-icon">🗓️</div>
+        <div class="stat-info">
+          <div class="stat-num">{{ upcoming }}</div>
+          <div class="stat-label">Upcoming</div>
+        </div>
+      </div>
+      <div class="stat-card stat-purple">
+        <div class="stat-icon">✅</div>
+        <div class="stat-info">
+          <div class="stat-num">{{ completed }}</div>
+          <div class="stat-label">Completed</div>
+        </div>
+      </div>
+      <div class="stat-card stat-orange">
+        <div class="stat-icon">🏥</div>
+        <div class="stat-info">
+          <div class="stat-num">12+</div>
+          <div class="stat-label">Available Doctors</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="quick-actions">
+      <h2>Quick Actions</h2>
+      <div class="action-grid">
+        <a href="{{ url_for('book_appointment') }}" class="action-card">
+          <div class="action-icon">📅</div>
+          <div class="action-label">Book Appointment</div>
+        </a>
+        <a href="{{ url_for('symptom_checker') }}" class="action-card">
+          <div class="action-icon">🧠</div>
+          <div class="action-label">Check Symptoms</div>
+        </a>
+        <a href="{{ url_for('chatbot') }}" class="action-card">
+          <div class="action-icon">🤖</div>
+          <div class="action-label">AI Chatbot</div>
+        </a>
+        <a href="#appointments" class="action-card">
+          <div class="action-icon">📊</div>
+          <div class="action-label">My History</div>
+        </a>
+      </div>
+    </div>
+
+    <!-- Appointments Table -->
+    <div class="appointments-section" id="appointments">
+      <h2>Your Appointments</h2>
+      {% if appointments %}
+      <div class="table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Doctor</th>
+              <th>Specialization</th>
+              <th>Date</th>
+              <th>Time</th>
+              <th>Reason</th>
+              <th>Status</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for appt in appointments %}
+            <tr>
+              <td><strong>{{ appt.doctor_name }}</strong></td>
+              <td>{{ appt.specialization }}</td>
+              <td>{{ appt.appointment_date }}</td>
+              <td>{{ appt.time_slot }}</td>
+              <td>{{ appt.reason or '—' }}</td>
+              <td>
+                <span class="badge badge-{{ appt.status }}">{{ appt.status.title() }}</span>
+              </td>
+              <td>
+                {% if appt.status == 'scheduled' %}
+                <form method="POST" action="{{ url_for('cancel_appointment', appt_id=appt.id) }}"
+                      onsubmit="return confirm('Cancel this appointment?')">
+                  <button type="submit" class="btn btn-danger btn-xs">Cancel</button>
+                </form>
+                {% else %}
+                <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state">
+        <div class="empty-icon">🗓️</div>
+        <p>No appointments yet.</p>
+        <a href="{{ url_for('book_appointment') }}" class="btn btn-primary">Book Your First Appointment</a>
+      </div>
+      {% endif %}
+    </div>
+  </main>
+
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
