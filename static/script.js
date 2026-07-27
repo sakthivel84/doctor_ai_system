@@ -1,17 +1,30 @@
 // MediAI - Frontend JavaScript
 
 // ─── Voice Booking (Web Speech API) ────────────────────────────────────────
+function resetVoiceBtn() {
+  const btn    = document.getElementById('voiceBtn');
+  const status = document.getElementById('voiceStatus');
+  if (btn) {
+    btn.textContent = '🎤 Voice Input';
+    btn.classList.remove('btn-danger');
+  }
+  if (status && !status.textContent.includes('Heard') && !status.textContent.includes('Parsed')) {
+    status.textContent = '';
+  }
+}
+
 function startVoice() {
-  if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
     alert('Voice input is not supported in this browser. Please use Google Chrome.');
     return;
   }
 
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const recognition = new SR();
+  const recognition = new SpeechRecognition();
   recognition.lang = 'en-IN';
   recognition.continuous = false;
   recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
 
   const btn    = document.getElementById('voiceBtn');
   const status = document.getElementById('voiceStatus');
@@ -20,15 +33,12 @@ function startVoice() {
   btn.classList.add('btn-danger');
   if (status) status.textContent = 'Speak now...';
 
-  recognition.start();
-
   recognition.onresult = async function(event) {
     const transcript = event.results[0][0].transcript;
     btn.textContent = '🎤 Voice Input';
     btn.classList.remove('btn-danger');
     if (status) status.textContent = `Heard: "${transcript}"`;
 
-    // Send to backend to parse intent
     try {
       const res  = await fetch('/api/parse-voice', {
         method: 'POST',
@@ -44,10 +54,31 @@ function startVoice() {
   };
 
   recognition.onerror = function(e) {
+    const errors = {
+      'not-allowed':  'Microphone access denied. Please allow mic access in browser settings.',
+      'no-speech':    'No speech detected. Please try again.',
+      'audio-capture': 'No microphone found. Please connect a microphone.',
+      'network':      'Network error. Check your internet connection.',
+      'aborted':      'Voice input cancelled.',
+    };
+    const msg = errors[e.error] || 'Voice error: ' + e.error;
     btn.textContent = '🎤 Voice Input';
     btn.classList.remove('btn-danger');
-    if (status) status.textContent = 'Voice error: ' + e.error;
+    if (status) status.textContent = msg;
+    showToast(msg, 'error');
   };
+
+  recognition.onend = function() {
+    resetVoiceBtn();
+  };
+
+  try {
+    recognition.start();
+  } catch (err) {
+    resetVoiceBtn();
+    if (status) status.textContent = 'Could not start voice input. Please try again.';
+    showToast('Could not start voice input.', 'error');
+  }
 }
 
 function applyVoiceIntent(data) {

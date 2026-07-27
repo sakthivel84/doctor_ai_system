@@ -120,23 +120,54 @@
     }
 
     function startChatVoice() {
-      if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
         alert('Voice input not supported in this browser. Try Chrome.');
         return;
       }
-      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-      const recognition = new SR();
+      const recognition = new SpeechRecognition();
       recognition.lang = 'en-IN';
-      recognition.start();
-      document.getElementById('voiceChatBtn').textContent = '🔴';
-      recognition.onresult = e => {
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      const voiceBtn = document.getElementById('voiceChatBtn');
+      voiceBtn.textContent = '🔴';
+      voiceBtn.disabled = true;
+
+      recognition.onresult = function(e) {
         document.getElementById('chatInput').value = e.results[0][0].transcript;
-        document.getElementById('voiceChatBtn').textContent = '🎤';
+        voiceBtn.textContent = '🎤';
+        voiceBtn.disabled = false;
         sendMessage();
       };
-      recognition.onerror = () => {
-        document.getElementById('voiceChatBtn').textContent = '🎤';
+
+      recognition.onerror = function(e) {
+        const errors = {
+          'not-allowed':  'Mic access denied. Allow mic in browser settings.',
+          'no-speech':    'No speech detected. Try again.',
+          'audio-capture': 'No microphone found.',
+          'network':      'Network error.',
+          'aborted':      'Cancelled.',
+        };
+        const msg = errors[e.error] || 'Voice error: ' + e.error;
+        voiceBtn.textContent = '🎤';
+        voiceBtn.disabled = false;
+        appendMessage(msg, 'bot');
       };
+
+      recognition.onend = function() {
+        voiceBtn.textContent = '🎤';
+        voiceBtn.disabled = false;
+      };
+
+      try {
+        recognition.start();
+      } catch (err) {
+        voiceBtn.textContent = '🎤';
+        voiceBtn.disabled = false;
+        appendMessage('Could not start voice input. Please try again.', 'bot');
+      }
     }
   </script>
 </body>
