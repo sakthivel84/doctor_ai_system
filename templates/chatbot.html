@@ -119,44 +119,74 @@
       if (el) el.remove();
     }
 
+    let chatRecognition = null;
+
     function startChatVoice() {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) {
-        alert('Voice input not supported in this browser. Try Chrome.');
+        appendMessage('Voice input not supported. Try Chrome.', 'bot');
         return;
       }
+
+      if (chatRecognition) {
+        chatRecognition.abort();
+        chatRecognition = null;
+        document.getElementById('voiceChatBtn').textContent = '🎤';
+        document.getElementById('voiceChatBtn').disabled = false;
+        return;
+      }
+
       const recognition = new SpeechRecognition();
       recognition.lang = 'en-IN';
-      recognition.continuous = false;
-      recognition.interimResults = false;
+      recognition.continuous = true;
+      recognition.interimResults = true;
       recognition.maxAlternatives = 1;
 
+      chatRecognition = recognition;
       const voiceBtn = document.getElementById('voiceChatBtn');
       voiceBtn.textContent = '🔴';
-      voiceBtn.disabled = true;
+      voiceBtn.disabled = false;
+
+      let gotFinal = false;
+
+      const speechTimeout = setTimeout(function() { recognition.stop(); }, 15000);
 
       recognition.onresult = function(e) {
-        document.getElementById('chatInput').value = e.results[0][0].transcript;
-        voiceBtn.textContent = '🎤';
-        voiceBtn.disabled = false;
-        sendMessage();
+        let interim = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          if (e.results[i].isFinal) {
+            gotFinal = true;
+            clearTimeout(speechTimeout);
+            document.getElementById('chatInput').value = e.results[i][0].transcript;
+            chatRecognition = null;
+            voiceBtn.textContent = '🎤';
+            voiceBtn.disabled = false;
+            sendMessage();
+            return;
+          } else {
+            interim += e.results[i][0].transcript;
+          }
+        }
+        if (interim) document.getElementById('chatInput').value = interim;
       };
 
       recognition.onerror = function(e) {
-        const errors = {
-          'not-allowed':  'Mic access denied. Allow mic in browser settings.',
-          'no-speech':    'No speech detected. Try again.',
-          'audio-capture': 'No microphone found.',
-          'network':      'Network error.',
-          'aborted':      'Cancelled.',
-        };
-        const msg = errors[e.error] || 'Voice error: ' + e.error;
+        clearTimeout(speechTimeout);
+        chatRecognition = null;
         voiceBtn.textContent = '🎤';
         voiceBtn.disabled = false;
-        appendMessage(msg, 'bot');
+        if (e.error === 'no-speech') {
+          appendMessage('No speech detected. Click mic and speak clearly.', 'bot');
+        } else if (e.error === 'not-allowed') {
+          appendMessage('Microphone access denied. Allow mic in browser settings.', 'bot');
+        } else if (e.error !== 'aborted') {
+          appendMessage('Voice error: ' + e.error, 'bot');
+        }
       };
 
       recognition.onend = function() {
+        clearTimeout(speechTimeout);
+        chatRecognition = null;
         voiceBtn.textContent = '🎤';
         voiceBtn.disabled = false;
       };
@@ -164,9 +194,10 @@
       try {
         recognition.start();
       } catch (err) {
+        chatRecognition = null;
         voiceBtn.textContent = '🎤';
         voiceBtn.disabled = false;
-        appendMessage('Could not start voice input. Please try again.', 'bot');
+        appendMessage('Could not start voice input. Try again.', 'bot');
       }
     }
   </script>
